@@ -1,0 +1,57 @@
+# Reax/C potential with alpha-alumina
+
+units		real
+atom_style	charge
+dimension       3
+boundary        p p p
+
+read_data    	data.sort_interface
+
+group    	type1 type 1
+compute   	charge1 type1 property/atom q
+compute   	q1 type1 reduce ave c_charge1
+group    	type2 type 2
+compute   	charge2 type2 property/atom q
+compute   	q2 type2 reduce ave c_charge2
+group           solid id 1:5760
+group           liquid id 5761:8466
+
+group		layer1 id 257:5504
+group		nlayer1 id 1:256 5505:5760
+group		layer2 id 575:5184
+group		nlayer2 id 1:574 5185:5760
+group		layer3 id 897:4864
+group		nlayer3 id 1:896 4865:5760
+compute		liqtemp liquid temp
+
+# variable   	qcat equal 2.8
+# variable  	qani equal -${qcat}*count(type2)/count(type1)
+# set   		group type2 charge ${qcat}
+# set   		group type1 charge ${qani}
+# variable   	qsum equal count(type1)*c_q1+count(type2)*c_q2
+
+# Ewald sum 
+pair_style  	reax/c NULL
+pair_coeff	* * ffield.reax.AlHCO O Al
+# kspace_style  	ewald 1e-6
+
+
+neighbor	2.0 bin
+neigh_modify	every 10 delay 0 check no
+timestep        0.2
+
+thermo_style	custom step temp c_liqtemp etotal pe press
+thermo_modify  	norm yes
+thermo   	50
+
+dump		coords all custom 50 al2o3_relaxed_layers.lammpstrj id type q x y z
+dump_modify	coords sort id
+
+fix     	1 all qeq/reax 1 0.0 10.0 1.0e-4 reax/c
+velocity  	liquid create 1043.0 42128 dist gaussian rot yes mom yes
+velocity  	nlayer1 create 10.0 42128 dist gaussian rot yes mom yes
+fix     	2 liquid nvt temp 1043.0 1043.0 20.0
+fix_modify	2 temp liqtemp
+fix		freezesolid solid setforce 0.0 0.0 0.0
+run		5000
+write_data	data.frozen_solid
